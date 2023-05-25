@@ -1,10 +1,6 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import sklearn
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error
 
 station_names = "PREŠERNOV TRG-PETKOVŠKOVO NABREŽJE,POGAČARJEV TRG-TRŽNICA,KONGRESNI TRG-ŠUBIČEVA ULICA,CANKARJEVA UL.-NAMA,BREG,GRUDNOVO NABREŽJE-KARLOVŠKA C.,MIKLOŠIČEV PARK,BAVARSKI DVOR,TRG OF-KOLODVORSKA UL.,MASARYKOVA DDC,VILHARJEVA CESTA,PARK NAVJE-ŽELEZNA CESTA,TRG MDB,PARKIRIŠČE NUK 2-FF,AMBROŽEV TRG,GH ŠENTPETER-NJEGOŠEVA C.,ILIRSKA ULICA,TRŽAŠKA C.-ILIRIJA,TIVOLI,STARA CERKEV,KINO ŠIŠKA,ŠPICA,BARJANSKA C.-CENTER STAREJŠIH TRNOVO,ZALOŠKA C.-GRABLOVIČEVA C.,TRŽNICA MOSTE,ROŽNA DOLINA-ŠKRABČEVA UL.,DUNAJSKA C.-PS PETROL,PLEČNIKOV STADION,DUNAJSKA C.-PS MERCATOR,LIDL - VOJKOVA CESTA,ŠPORTNI CENTER STOŽICE,KOPRSKA ULICA,MERCATOR CENTER ŠIŠKA,CITYPARK,BTC CITY/DVORANA A,BTC CITY ATLANTIS,TRNOVO,P+R BARJE,P + R DOLGI MOST,BONIFACIJA,ANTONOV TRG,BRATOVŠEVA PLOŠČAD,BS4-STOŽICE,SAVSKO NASELJE 2-LINHARTOVA CESTA,SAVSKO NASELJE 1-ŠMARTINSKA CESTA,SITULA,ŠTEPANJSKO NASELJE 1-JAKČEVA ULICA,HOFER-KAJUHOVA,BRODARJEV TRG,PREGLOV TRG,LIDL-LITIJSKA CESTA,ŽIVALSKI VRT,CESTA NA ROŽNIK,ŠMARTINSKI PARK,POLJANSKA-POTOČNIKOVA,SREDNJA FRIZERSKA ŠOLA,POVŠETOVA-GRABLOVIČEVA,TRŽNICA KOSEZE,LIDL BEŽIGRAD,MERCATOR MARKET - CELOVŠKA C. 163,RAKOVNIK,ALEJA - CELOVŠKA CESTA,IKEA,KOPALIŠČE KOLEZIJA,VIŠKO POLJE,KOSEŠKI BAJER,DRAVLJE,ČRNUČE,STUDENEC,POLJE,ZALOG,LIDL - RUDNIK,PRUŠNIKOVA,POVŠETOVA - KAJUHOVA,SOSESKA NOVO BRDO,TEHNOLOŠKI PARK,VOJKOVA - GASILSKA BRIGADA,GERBIČEVA - ŠPORTNI PARK SVOBODA,DOLENJSKA C. - STRELIŠČE,ROŠKA - STRELIŠKA,LEK - VEROVŠKOVA,VOKA - SLOVENČEVA,SUPERNOVA LJUBLJANA - RUDNIK"
 station_names = station_names.split(",")
@@ -22,69 +18,183 @@ def main():
     vreme["količina padavin [mm]"] = vreme["količina padavin [mm]"].interpolate(method="nearest")
 
     data = train.copy()
-    data["timestamp"] = [pd.to_datetime(ts).tz_localize(None) for ts in data["timestamp"].values]
+    endgame = test.copy()
 
+    
+    # modify data
+
+    # Weather conditions
+    closest = np.argmin(np.abs(vreme[" valid"].values[:, None] - data["timestamp"].values), axis=0)
+    closest_test = np.argmin(np.abs(vreme[" valid"].values[:, None] - endgame["timestamp"].values), axis=0)
+    data["light rain"] = np.where((vreme.loc[closest, "količina padavin [mm]"].values > 0) & (vreme.loc[closest, "količina padavin [mm]"].values <= 2.5), 1, 0)
+    test["light rain"] = np.where((vreme.loc[closest_test, "količina padavin [mm]"].values > 0) & (vreme.loc[closest_test, "količina padavin [mm]"].values <= 2.5), 1, 0)
+    data["heavy rain"] = np.where(vreme.loc[closest, "količina padavin [mm]"].values > 2.5, 1, 0)
+    test["heavy rain"] = np.where(vreme.loc[closest_test, "količina padavin [mm]"].values > 2.5, 1, 0)
+    data["low humidity"] = np.where(vreme.loc[closest, "povp. rel. vla. [%]"].values <= 50, 1, 0)
+    test["low humidity"] = np.where(vreme.loc[closest_test, "povp. rel. vla. [%]"].values <= 50, 1, 0)
+    data["high humidity"] = np.where(vreme.loc[closest, "povp. rel. vla. [%]"].values > 50, 1, 0)
+    test["high humidity"] = np.where(vreme.loc[closest_test, "povp. rel. vla. [%]"].values > 50, 1, 0)
+    data["temp 10-20"] = np.where(vreme.loc[closest, "povp. T [°C]"].values <= 20, 1, 0)
+    test["temp 10-20"] = np.where(vreme.loc[closest_test, "povp. T [°C]"].values <= 20, 1, 0)
+    data["temp 20-30"] = np.where((vreme.loc[closest, "povp. T [°C]"].values > 20) & (vreme.loc[closest, "povp. T [°C]"].values <= 30), 1, 0)
+    test["temp 20-30"] = np.where((vreme.loc[closest_test, "povp. T [°C]"].values > 20) & (vreme.loc[closest_test, "povp. T [°C]"].values <= 30), 1, 0)
+    data["temp > 30"] = np.where(vreme.loc[closest, "povp. T [°C]"].values > 30, 1, 0)
+    test["temp > 30"] = np.where(vreme.loc[closest_test, "povp. T [°C]"].values > 30, 1, 0)
+
+    # Weekend
+    data["weekend"] = np.where(data["timestamp"].dt.weekday >= 5, 1, 0)
+    test["weekend"] = np.where(endgame["timestamp"].dt.weekday >= 5, 1, 0)
+
+    # School holiday
+    data["school holiday"] = np.where(data["timestamp"].dt.month == 8, 1, 0)
+    test["school holiday"] = np.where(endgame["timestamp"].dt.month == 8, 1, 0)
+
+    # Time of day
+    data["00-03"] = np.where((data["timestamp"].dt.hour >= 0) & (data["timestamp"].dt.hour < 3), 1, 0)
+    test["00-03"] = np.where((endgame["timestamp"].dt.hour >= 0) & (endgame["timestamp"].dt.hour < 3), 1, 0)
+    data["03-07"] = np.where((data["timestamp"].dt.hour >= 3) & (data["timestamp"].dt.hour < 7), 1, 0)
+    test["03-07"] = np.where((endgame["timestamp"].dt.hour >= 3) & (endgame["timestamp"].dt.hour < 7), 1, 0)
+    data["07-09"] = np.where((data["timestamp"].dt.hour >= 7) & (data["timestamp"].dt.hour < 9), 1, 0)
+    test["07-09"] = np.where((endgame["timestamp"].dt.hour >= 7) & (endgame["timestamp"].dt.hour < 9), 1, 0)
+    data["09-12"] = np.where((data["timestamp"].dt.hour >= 9) & (data["timestamp"].dt.hour < 12), 1, 0)
+    test["09-12"] = np.where((endgame["timestamp"].dt.hour >= 9) & (endgame["timestamp"].dt.hour < 12), 1, 0)
+    data["12-15"] = np.where((data["timestamp"].dt.hour >= 12) & (data["timestamp"].dt.hour < 15), 1, 0)
+    test["12-15"] = np.where((endgame["timestamp"].dt.hour >= 12) & (endgame["timestamp"].dt.hour < 15), 1, 0)
+    data["15-17"] = np.where((data["timestamp"].dt.hour >= 15) & (data["timestamp"].dt.hour < 17), 1, 0)
+    test["15-17"] = np.where((endgame["timestamp"].dt.hour >= 15) & (endgame["timestamp"].dt.hour < 17), 1, 0)
+    data["17-20"] = np.where((data["timestamp"].dt.hour >= 17) & (data["timestamp"].dt.hour < 20), 1, 0)
+    test["17-20"] = np.where((endgame["timestamp"].dt.hour >= 17) & (endgame["timestamp"].dt.hour < 20), 1, 0)
+    data["20-24"] = np.where((data["timestamp"].dt.hour >= 20) & (data["timestamp"].dt.hour < 24), 1, 0)
+    test["20-24"] = np.where((endgame["timestamp"].dt.hour >= 20) & (endgame["timestamp"].dt.hour < 24), 1, 0)
+    
 # modify data
-    # a sploh rabm to al se avtomatsko nardi?
-    data["light rain"] = 0 
-    data["heavy rain"] = 0
-    data["low humidity"] = 0
-    data["high humidity"] = 0
-    data["temp 10-20"] = 0
-    data["temp 20-30"] = 0
-    data["temp 30+"] = 0
-    data["weekend"] = 0
-    data["school holiday"] = 0
-    data["7-9"] = 0
-    data["9-12"] = 0
-    data["12-15"] = 0
-    data["15-18"] = 0
-    data["18-24"] = 0
-    for i, t in enumerate(data["timestamp"].values):
-        # weather
-        closest = np.argmin(np.abs(vreme[" valid"].values - t))
-        data.loc[i, "light rain"] = 1 if (vreme.loc[closest, "količina padavin [mm]"] > 0 and vreme.loc[closest, "količina padavin [mm]"] <= 2.5) else 0
-        data.loc[i, "heavy rain"] = 1 if vreme.loc[closest, "količina padavin [mm]"] > 2.5 else 0
-        data.loc[i, "low humidity"] = 1 if vreme.loc[closest, "povp. rel. vla. [%]"] <= 50 else 0
-        data.loc[i, "high humidity"] = 1 if vreme.loc[closest, "povp. rel. vla. [%]"] > 50 else 0
-        data.loc[i, "temp 10-20"] = 1 if vreme.loc[closest, "povp. T [°C]"] <= 20 else 0
-        data.loc[i, "temp 20-30"] = 1 if (vreme.loc[closest, "povp. T [°C]"] > 20 and vreme.loc[closest, "povp. T [°C]"] <= 30) else 0
-        data.loc[i, "temp 20-30"] = 1 if vreme.loc[closest, "povp. T [°C]"] > 30 else 0
+    # for i, t in enumerate(data["timestamp"]):
+    #     # weather
+    #     closest = np.argmin(np.abs(vreme[" valid"] - t))
+    #     data.loc[i, "light rain"] = 1 if (vreme.loc[closest, "količina padavin [mm]"] > 0 and vreme.loc[closest, "količina padavin [mm]"] <= 2.5) else 0
+    #     data.loc[i, "heavy rain"] = 1 if vreme.loc[closest, "količina padavin [mm]"] > 2.5 else 0
+    #     data.loc[i, "low humidity"] = 1 if vreme.loc[closest, "povp. rel. vla. [%]"] <= 50 else 0
+    #     data.loc[i, "high humidity"] = 1 if vreme.loc[closest, "povp. rel. vla. [%]"] > 50 else 0
+    #     data.loc[i, "temp 10-20"] = 1 if vreme.loc[closest, "povp. T [°C]"] <= 20 else 0
+    #     data.loc[i, "temp 20-30"] = 1 if (vreme.loc[closest, "povp. T [°C]"] > 20 and vreme.loc[closest, "povp. T [°C]"] <= 30) else 0
+    #     data.loc[i, "temp 20-30"] = 1 if vreme.loc[closest, "povp. T [°C]"] > 30 else 0
         
-        # weekend
-        data.loc[i, "weekend"] = 1 if t.weekday() >= 5 else 0
+    #     # weekend
+    #     data.loc[i, "weekend"] = 1 if t.weekday() >= 5 else 0
 
-        # school holiday
-        data.loc[i, "school holiday"] = 1 if (t.month == 8) else 0
+    #     # school holiday
+    #     data.loc[i, "school holiday"] = 1 if (t.month == 8) else 0
 
-        # time
-        data.loc[i, "7-9"] = 1 if (t.hour >= 7 and t.hour < 9) else 0
-        data.loc[i, "9-12"] = 1 if (t.hour >= 9 and t.hour < 12) else 0
-        data.loc[i, "12-15"] = 1 if (t.hour >= 12 and t.hour < 15) else 0
-        data.loc[i, "15-18"] = 1 if (t.hour >= 15 and t.hour < 18) else 0
-        data.loc[i, "18-24"] = 1 if (t.hour >= 18 and t.hour < 24) else 0
+    #     # # time
+    #     data.loc[i, "7-9"] = 1 if (t.hour >= 7 and t.hour < 9) else 0
+    #     data.loc[i, "9-12"] = 1 if (t.hour >= 9 and t.hour < 12) else 0
+    #     data.loc[i, "12-14"] = 1 if (t.hour >= 12 and t.hour < 14) else 0
+    #     data.loc[i, "14-16"] = 1 if (t.hour >= 14 and t.hour < 16) else 0
+    #     data.loc[i, "16-18"] = 1 if (t.hour >= 16 and t.hour < 18) else 0
+    #     data.loc[i, "18-21"] = 1 if (t.hour >= 18 and t.hour < 21) else 0
+    #     data.loc[i, "21-24"] = 1 if (t.hour >= 21 and t.hour < 24) else 0
 
-        # bikes before
-        # ne vem kako se odštejejo časi
-        # data.loc[i, "bikes_30min"] = data.loc[i-30min, "bikes"]
-        data.loc[i, "bikes_1h"] = data.loc[i - 1, "bikes"]
-        # data.loc[i, "bikes_90min"] = data.loc[i-90min, "bikes"]
-        data.loc[i, "bikes_2h"] = data.loc[i - 2, "bikes"]
+    mins_60_before = data.copy()
+    mins_60_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=60)
+    mins_90_before = data.copy()
+    mins_90_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=90)
+    mins_120_before = data.copy()
+    mins_120_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=120)
+    mins_180_before = data.copy()
+    mins_180_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=180)
+    mins_210_before = data.copy()
+    mins_210_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=210)
+    mins_240_before = data.copy()
+    mins_240_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=240)
+    mins_270_before = data.copy()
+    mins_270_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=270)
+
+    test.drop(columns=station_names, inplace=True)
 
 
-
-    print(data.head())
-
-    for station in data.columns:
+    for station in station_names:
         target = data[station]
-        station_data1 = data.drop(columns=station_names.remove(station)) # temu damo kolesa od zdej nazaj 
-        station_data2 = data.drop(columns=station_names.remove(station)) # temu damo kolesa od pred 1h nazaj 
+        # print(mins_60_before["timestamp"])
+        # print(data["timestamp"])
+        station_data1 = data.drop(columns=station_names)
+        station_data1 = pd.merge_asof(station_data1, mins_60_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data1.rename(columns={station: "60 min before"}, inplace=True)
+        station_data1 = pd.merge_asof(station_data1, mins_90_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data1.rename(columns={station: "90 min before"}, inplace=True)
+        station_data1 = pd.merge_asof(station_data1, mins_120_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data1.rename(columns={station: "120 min before"}, inplace=True)
+        station_data1 = pd.merge_asof(station_data1, mins_180_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data1.rename(columns={station: "180 min before"}, inplace=True)
+        station_data1 = pd.merge_asof(station_data1, mins_210_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data1.rename(columns={station: "210 min before"}, inplace=True)
+        station_data1.drop(columns=["timestamp"], inplace=True)
+
+        station_data2 = data.drop(columns=station_names)
+        station_data2 = pd.merge_asof(station_data2, mins_120_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data2.rename(columns={station: "120 min before"}, inplace=True)
+        station_data2 = pd.merge_asof(station_data2, mins_180_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data2.rename(columns={station: "180 min before"}, inplace=True)
+        station_data2 = pd.merge_asof(station_data2, mins_210_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data2.rename(columns={station: "210 min before"}, inplace=True)
+        station_data2 = pd.merge_asof(station_data2, mins_240_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data2.rename(columns={station: "240 min before"}, inplace=True)
+        station_data2 = pd.merge_asof(station_data2, mins_270_before[["timestamp", station]], on="timestamp", direction="nearest")
+        station_data2.rename(columns={station: "270 min before"}, inplace=True)
+        station_data2.drop(columns=["timestamp"], inplace=True)        
+
+        test_1h = test.copy()
+        test_2h = test.copy()
+
+        test_1h = pd.merge_asof(test_1h, mins_60_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_1h.rename(columns={station: "60 min before"}, inplace=True)
+        test_1h = pd.merge_asof(test_1h, mins_90_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_1h.rename(columns={station: "90 min before"}, inplace=True)
+        test_1h = pd.merge_asof(test_1h, mins_120_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_1h.rename(columns={station: "120 min before"}, inplace=True)
+        test_1h = pd.merge_asof(test_1h, mins_180_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_1h.rename(columns={station: "180 min before"}, inplace=True)
+        test_1h = pd.merge_asof(test_1h, mins_210_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_1h.rename(columns={station: "210 min before"}, inplace=True)
+
+        test_2h = pd.merge_asof(test_2h, mins_120_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_2h.rename(columns={station: "120 min before"}, inplace=True)
+        test_2h = pd.merge_asof(test_2h, mins_180_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_2h.rename(columns={station: "180 min before"}, inplace=True)
+        test_2h = pd.merge_asof(test_2h, mins_210_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_2h.rename(columns={station: "210 min before"}, inplace=True)
+        test_2h = pd.merge_asof(test_2h, mins_240_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_2h.rename(columns={station: "240 min before"}, inplace=True)
+        test_2h = pd.merge_asof(test_2h, mins_270_before[["timestamp", station]], on="timestamp", direction="nearest")
+        test_2h.rename(columns={station: "270 min before"}, inplace=True)
+
+        test_1h.drop(columns=["timestamp"], inplace=True)
+        test_2h.drop(columns=["timestamp"], inplace=True)
+
+        # print(station_data1.keys())
+        # print(station_data2.keys())
+        # print(test_1h.keys())
+        # print(test_2h.keys())
+        # break
         model_1h = LinearRegression()
         model_2h = LinearRegression()
         model_1h.fit(station_data1, target) 
-        model_1h.fit(station_data2, target)
+        model_2h.fit(station_data2, target)
+
+        model_1h_pred = model_1h.predict(test_1h)
+        model_2h_pred = model_2h.predict(test_2h)
+
+        # round to an integer (is this even better?)
+        model_1h_pred = np.round(model_1h_pred)
+        model_2h_pred = np.round(model_2h_pred)
+
+        # insert predictions into endgame
+        endgame.loc[::2, station] = model_1h_pred[::2]
+        endgame.loc[1::2, station] = model_2h_pred[1::2]
+    
+
+    # save endgame into a new csv file
+    endgame.to_csv("pazi.csv", sep=",", index=False)
         
-    # test.to_csv("closest_time.csv", sep=",", index=False)
 
 if __name__ == '__main__':
     main()
