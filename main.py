@@ -20,7 +20,7 @@ def main():
     data = train.copy()
     endgame = test.copy()
 
-    
+
     # modify data
 
     # Weather conditions
@@ -40,6 +40,21 @@ def main():
     test["temp 20-30"] = np.where((vreme.loc[closest_test, "povp. T [°C]"].values > 20) & (vreme.loc[closest_test, "povp. T [°C]"].values <= 30), 1, 0)
     data["temp > 30"] = np.where(vreme.loc[closest, "povp. T [°C]"].values > 30, 1, 0)
     test["temp > 30"] = np.where(vreme.loc[closest_test, "povp. T [°C]"].values > 30, 1, 0)
+    
+    # special lines to check if there was rain on that day (to izboljša rezultate za 0.002 na testni, pustim noter ker verjetno pomaga)
+    vreme["date"] = pd.to_datetime(vreme[" valid"]).dt.date
+    vreme["date"] = pd.to_datetime(vreme["date"]).dt.tz_localize(None)
+    vreme["rain that date"] = np.where(vreme["količina padavin [mm]"] > 0, 1, 0)
+    vreme = vreme.drop_duplicates(subset="date", keep="first")
+    rain = vreme[["date", "rain that date"]]
+    data["date"] = pd.to_datetime(data["timestamp"]).dt.date
+    data["date"] = pd.to_datetime(data["date"]).dt.tz_localize(None)
+    test["date"] = pd.to_datetime(test["timestamp"]).dt.date
+    test["date"] = pd.to_datetime(test["date"]).dt.tz_localize(None)
+    data = pd.merge_asof(data, rain[["date", "rain that date"]], on="date", direction="nearest")
+    test = pd.merge_asof(test, rain[["date", "rain that date"]], on="date", direction="nearest")
+    data = data.drop(columns=["date"])
+    test = test.drop(columns=["date"])
 
     # Weekend
     data["weekend"] = np.where(data["timestamp"].dt.weekday >= 5, 1, 0)
@@ -66,33 +81,6 @@ def main():
     test["17-20"] = np.where((endgame["timestamp"].dt.hour >= 17) & (endgame["timestamp"].dt.hour < 20), 1, 0)
     data["20-24"] = np.where((data["timestamp"].dt.hour >= 20) & (data["timestamp"].dt.hour < 24), 1, 0)
     test["20-24"] = np.where((endgame["timestamp"].dt.hour >= 20) & (endgame["timestamp"].dt.hour < 24), 1, 0)
-    
-# modify data
-    # for i, t in enumerate(data["timestamp"]):
-    #     # weather
-    #     closest = np.argmin(np.abs(vreme[" valid"] - t))
-    #     data.loc[i, "light rain"] = 1 if (vreme.loc[closest, "količina padavin [mm]"] > 0 and vreme.loc[closest, "količina padavin [mm]"] <= 2.5) else 0
-    #     data.loc[i, "heavy rain"] = 1 if vreme.loc[closest, "količina padavin [mm]"] > 2.5 else 0
-    #     data.loc[i, "low humidity"] = 1 if vreme.loc[closest, "povp. rel. vla. [%]"] <= 50 else 0
-    #     data.loc[i, "high humidity"] = 1 if vreme.loc[closest, "povp. rel. vla. [%]"] > 50 else 0
-    #     data.loc[i, "temp 10-20"] = 1 if vreme.loc[closest, "povp. T [°C]"] <= 20 else 0
-    #     data.loc[i, "temp 20-30"] = 1 if (vreme.loc[closest, "povp. T [°C]"] > 20 and vreme.loc[closest, "povp. T [°C]"] <= 30) else 0
-    #     data.loc[i, "temp 20-30"] = 1 if vreme.loc[closest, "povp. T [°C]"] > 30 else 0
-        
-    #     # weekend
-    #     data.loc[i, "weekend"] = 1 if t.weekday() >= 5 else 0
-
-    #     # school holiday
-    #     data.loc[i, "school holiday"] = 1 if (t.month == 8) else 0
-
-    #     # # time
-    #     data.loc[i, "7-9"] = 1 if (t.hour >= 7 and t.hour < 9) else 0
-    #     data.loc[i, "9-12"] = 1 if (t.hour >= 9 and t.hour < 12) else 0
-    #     data.loc[i, "12-14"] = 1 if (t.hour >= 12 and t.hour < 14) else 0
-    #     data.loc[i, "14-16"] = 1 if (t.hour >= 14 and t.hour < 16) else 0
-    #     data.loc[i, "16-18"] = 1 if (t.hour >= 16 and t.hour < 18) else 0
-    #     data.loc[i, "18-21"] = 1 if (t.hour >= 18 and t.hour < 21) else 0
-    #     data.loc[i, "21-24"] = 1 if (t.hour >= 21 and t.hour < 24) else 0
 
     mins_60_before = data.copy()
     mins_60_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=60)
@@ -112,10 +100,10 @@ def main():
     test.drop(columns=station_names, inplace=True)
 
 
+    # build 2 models for each station
     for station in station_names:
         target = data[station]
-        # print(mins_60_before["timestamp"])
-        # print(data["timestamp"])
+
         station_data1 = data.drop(columns=station_names)
         station_data1 = pd.merge_asof(station_data1, mins_60_before[["timestamp", station]], on="timestamp", direction="nearest")
         station_data1.rename(columns={station: "60 min before"}, inplace=True)
@@ -169,14 +157,10 @@ def main():
 
         test_1h.drop(columns=["timestamp"], inplace=True)
         test_2h.drop(columns=["timestamp"], inplace=True)
-
-        # print(station_data1.keys())
-        # print(station_data2.keys())
-        # print(test_1h.keys())
-        # print(test_2h.keys())
-        # break
+        station_data1.to_csv("station_data1.csv", sep=",", index=False)
         model_1h = LinearRegression()
         model_2h = LinearRegression()
+
         model_1h.fit(station_data1, target) 
         model_2h.fit(station_data2, target)
 
@@ -193,7 +177,7 @@ def main():
     
 
     # save endgame into a new csv file
-    endgame.to_csv("pazi.csv", sep=",", index=False)
+    endgame.to_csv("linear_regression_with_rain_that_date.csv", sep=",", index=False)
         
 
 if __name__ == '__main__':
