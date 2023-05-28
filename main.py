@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
 
 station_names = "PREŠERNOV TRG-PETKOVŠKOVO NABREŽJE,POGAČARJEV TRG-TRŽNICA,KONGRESNI TRG-ŠUBIČEVA ULICA,CANKARJEVA UL.-NAMA,BREG,GRUDNOVO NABREŽJE-KARLOVŠKA C.,MIKLOŠIČEV PARK,BAVARSKI DVOR,TRG OF-KOLODVORSKA UL.,MASARYKOVA DDC,VILHARJEVA CESTA,PARK NAVJE-ŽELEZNA CESTA,TRG MDB,PARKIRIŠČE NUK 2-FF,AMBROŽEV TRG,GH ŠENTPETER-NJEGOŠEVA C.,ILIRSKA ULICA,TRŽAŠKA C.-ILIRIJA,TIVOLI,STARA CERKEV,KINO ŠIŠKA,ŠPICA,BARJANSKA C.-CENTER STAREJŠIH TRNOVO,ZALOŠKA C.-GRABLOVIČEVA C.,TRŽNICA MOSTE,ROŽNA DOLINA-ŠKRABČEVA UL.,DUNAJSKA C.-PS PETROL,PLEČNIKOV STADION,DUNAJSKA C.-PS MERCATOR,LIDL - VOJKOVA CESTA,ŠPORTNI CENTER STOŽICE,KOPRSKA ULICA,MERCATOR CENTER ŠIŠKA,CITYPARK,BTC CITY/DVORANA A,BTC CITY ATLANTIS,TRNOVO,P+R BARJE,P + R DOLGI MOST,BONIFACIJA,ANTONOV TRG,BRATOVŠEVA PLOŠČAD,BS4-STOŽICE,SAVSKO NASELJE 2-LINHARTOVA CESTA,SAVSKO NASELJE 1-ŠMARTINSKA CESTA,SITULA,ŠTEPANJSKO NASELJE 1-JAKČEVA ULICA,HOFER-KAJUHOVA,BRODARJEV TRG,PREGLOV TRG,LIDL-LITIJSKA CESTA,ŽIVALSKI VRT,CESTA NA ROŽNIK,ŠMARTINSKI PARK,POLJANSKA-POTOČNIKOVA,SREDNJA FRIZERSKA ŠOLA,POVŠETOVA-GRABLOVIČEVA,TRŽNICA KOSEZE,LIDL BEŽIGRAD,MERCATOR MARKET - CELOVŠKA C. 163,RAKOVNIK,ALEJA - CELOVŠKA CESTA,IKEA,KOPALIŠČE KOLEZIJA,VIŠKO POLJE,KOSEŠKI BAJER,DRAVLJE,ČRNUČE,STUDENEC,POLJE,ZALOG,LIDL - RUDNIK,PRUŠNIKOVA,POVŠETOVA - KAJUHOVA,SOSESKA NOVO BRDO,TEHNOLOŠKI PARK,VOJKOVA - GASILSKA BRIGADA,GERBIČEVA - ŠPORTNI PARK SVOBODA,DOLENJSKA C. - STRELIŠČE,ROŠKA - STRELIŠKA,LEK - VEROVŠKOVA,VOKA - SLOVENČEVA,SUPERNOVA LJUBLJANA - RUDNIK"
 station_names = station_names.split(",")
@@ -109,39 +112,32 @@ def main():
         target = data[station]
 
         # drop station names
-        _station_names = station_names.copy()
-        _station_names.remove(station)
-        station_data = data.drop(columns=_station_names)
+        # _station_names = station_names.copy()
+        # _station_names.remove(station)
+        # station_data = data.drop(columns=_station_names)
 
-        # create a new dataframe with averages for each day of the week at each time interval
-        averages = pd.DataFrame(columns=time_intervals)
-        for interval in time_intervals:
-            filtered_data = station_data[station_data[interval] == 1]
-            average = filtered_data.groupby("day of the week")[station].mean()
-            averages[interval] = average
-            # averages[interval] = np.round(average)
+        # # create a new dataframe with averages for each day of the week at each time interval
+        # averages = pd.DataFrame(columns=time_intervals)
+        # for interval in time_intervals:
+        #     filtered_data = station_data[station_data[interval] == 1]
+        #     average = filtered_data.groupby("day of the week")[station].mean()
+        #     # averages[interval] = average
+        #     averages[interval] = np.round(average)
 
-        # insert averages into station_data
-        valid_intervals = station_data[time_intervals].eq(1)
-        valid_intervals_index = valid_intervals.apply(lambda x: x.index[x].tolist(), axis=1)
-        station_data["average at interval and weekday"] = averages.lookup(station_data["day of the week"], valid_intervals_index.str[0])
-        # insert averages into test_data
-        valid_intervals = test[time_intervals].eq(1)
-        valid_intervals_index = valid_intervals.apply(lambda x: x.index[x].tolist(), axis=1)
-        test["average at interval and weekday"] = averages.lookup(test["day of the week"], valid_intervals_index.str[0])
+        # # insert averages into station_data
+        # valid_intervals = station_data[time_intervals].eq(1)
+        # valid_intervals_index = valid_intervals.apply(lambda x: x.index[x].tolist(), axis=1)
+        # station_data["average at interval and weekday"] = averages.lookup(station_data["day of the week"], valid_intervals_index.str[0])
+        # # insert averages into test_data
+        # valid_intervals = test[time_intervals].eq(1)
+        # valid_intervals_index = valid_intervals.apply(lambda x: x.index[x].tolist(), axis=1)
+        # test["average at interval and weekday"] = averages.lookup(test["day of the week"], valid_intervals_index.str[0])
 
-        # station_data["average at interval and weekday"] = 0
-        # for i, row in station_data.iterrows():
-        #     valid_intervals = row[time_intervals].index[row[time_intervals] == 1].tolist()
-        #     station_data.loc[i, "average at interval and weekday"] = averages.loc[row["day of the week"], valid_intervals[0]]
 
-        # test["average at interval and weekday"] = 0
-        # for i, row in test.iterrows():
-        #     valid_intervals = row[time_intervals].index[row[time_intervals] == 1].tolist()
-        #     test.loc[i, "average at interval and weekday"] = averages.loc[row["day of the week"], valid_intervals[0]]
-
-        station_data1 = station_data.drop(columns=["day of the week", station])
-        station_data2 = station_data.drop(columns=["day of the week", station])
+        # station_data1 = station_data.drop(columns=["day of the week", station])
+        # station_data2 = station_data.drop(columns=["day of the week", station])
+        station_data1 = data.drop(columns=station_names)
+        station_data2 = data.drop(columns=station_names)
 
         # how many bikes were there 60, 90, 120, 180, 210, 240, 270 minutes before 
         station_data1 = pd.merge_asof(station_data1, mins_60_before[["timestamp", station]], on="timestamp", direction="nearest")
@@ -168,8 +164,10 @@ def main():
         station_data2.rename(columns={station: "270 min before"}, inplace=True)
         station_data2.drop(columns=["timestamp"], inplace=True)        
 
-        test_1h = test.drop(columns=["day of the week"])
-        test_2h = test.drop(columns=["day of the week"])
+        # test_1h = test.drop(columns=["day of the week"])
+        # test_2h = test.drop(columns=["day of the week"])
+        test_1h = test.copy()
+        test_2h = test.copy()
 
         test_1h = pd.merge_asof(test_1h, mins_60_before[["timestamp", station]], on="timestamp", direction="nearest")
         test_1h.rename(columns={station: "60 min before"}, inplace=True)
@@ -197,8 +195,17 @@ def main():
         test_2h.drop(columns=["timestamp"], inplace=True)
 
         # model
-        model_1h = LinearRegression()
-        model_2h = LinearRegression()
+        # model_1h = LinearRegression()
+        # model_2h = LinearRegression()
+        model_1h = GradientBoostingRegressor()
+        model_2h = GradientBoostingRegressor()
+        # model_1h = RandomForestRegressor()
+        # model_2h = RandomForestRegressor()
+        # model_1h = SVR()
+        # model_2h = SVR()
+        # model_1h = DecisionTreeRegressor()
+        # model_2h = DecisionTreeRegressor()
+
 
         model_1h.fit(station_data1, target) 
         model_2h.fit(station_data2, target)
@@ -216,7 +223,7 @@ def main():
     
 
     # save endgame into a new csv file
-    endgame.to_csv("linear_regression_with_weekday_and_time_interval_average_not_rounded.csv", sep=",", index=False)
+    endgame.to_csv("gradient_boosting.csv", sep=",", index=False)
         
 
 if __name__ == '__main__':
