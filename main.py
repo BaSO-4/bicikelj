@@ -25,7 +25,7 @@ def main():
     endgame = test.copy()
 
 
-    # modify data
+    # preprocess data
 
     # Weather conditions
     closest = np.argmin(np.abs(vreme[" valid"].values[:, None] - data["timestamp"].values), axis=0)
@@ -38,8 +38,8 @@ def main():
     test["low humidity"] = np.where(vreme.loc[closest_test, "povp. rel. vla. [%]"].values <= 50, 1, 0)
     data["high humidity"] = np.where(vreme.loc[closest, "povp. rel. vla. [%]"].values > 50, 1, 0)
     test["high humidity"] = np.where(vreme.loc[closest_test, "povp. rel. vla. [%]"].values > 50, 1, 0)
-    data["temp 10-20"] = np.where(vreme.loc[closest, "povp. T [°C]"].values <= 20, 1, 0)
-    test["temp 10-20"] = np.where(vreme.loc[closest_test, "povp. T [°C]"].values <= 20, 1, 0)
+    data["temp < 20"] = np.where(vreme.loc[closest, "povp. T [°C]"].values <= 20, 1, 0)
+    test["temp < 20"] = np.where(vreme.loc[closest_test, "povp. T [°C]"].values <= 20, 1, 0)
     data["temp 20-30"] = np.where((vreme.loc[closest, "povp. T [°C]"].values > 20) & (vreme.loc[closest, "povp. T [°C]"].values <= 30), 1, 0)
     test["temp 20-30"] = np.where((vreme.loc[closest_test, "povp. T [°C]"].values > 20) & (vreme.loc[closest_test, "povp. T [°C]"].values <= 30), 1, 0)
     data["temp > 30"] = np.where(vreme.loc[closest, "povp. T [°C]"].values > 30, 1, 0)
@@ -61,13 +61,19 @@ def main():
     test = test.drop(columns=["date"])
 
     # Weekend
-    data["weekend"] = np.where(data["timestamp"].dt.weekday >= 5, 1, 0)
-    test["weekend"] = np.where(endgame["timestamp"].dt.weekday >= 5, 1, 0)
+    data["saturday"] = np.where(data["timestamp"].dt.weekday == 5, 1, 0)
+    test["saturday"] = np.where(endgame["timestamp"].dt.weekday == 5, 1, 0)
+    data["sunday"] = np.where(data["timestamp"].dt.weekday == 6, 1, 0)
+    test["sunday"] = np.where(endgame["timestamp"].dt.weekday == 6, 1, 0)
 
     # School holiday
     data["school holiday"] = np.where(data["timestamp"].dt.month == 8, 1, 0)
     test["school holiday"] = np.where(endgame["timestamp"].dt.month == 8, 1, 0)
 
+    # student exam period
+    # data["exam period"] = np.where(data["timestamp"].dt.date >= pd.to_datetime("15.9.2022").date(), 1, 0)
+    # test["exam period"] = np.where(endgame["timestamp"].dt.date >= pd.to_datetime("15.9.2022").date(), 1, 0)
+         
     # Time of day
     data["00-03"] = np.where((data["timestamp"].dt.hour >= 0) & (data["timestamp"].dt.hour < 3), 1, 0)
     test["00-03"] = np.where((endgame["timestamp"].dt.hour >= 0) & (endgame["timestamp"].dt.hour < 3), 1, 0)
@@ -86,8 +92,8 @@ def main():
     data["20-24"] = np.where((data["timestamp"].dt.hour >= 20) & (data["timestamp"].dt.hour < 24), 1, 0)
     test["20-24"] = np.where((endgame["timestamp"].dt.hour >= 20) & (endgame["timestamp"].dt.hour < 24), 1, 0)
 
-    data["day of the week"] = data["timestamp"].dt.weekday
-    test["day of the week"] = endgame["timestamp"].dt.weekday
+    # data["day of the week"] = data["timestamp"].dt.weekday
+    # test["day of the week"] = endgame["timestamp"].dt.weekday
 
     mins_60_before = data.copy()
     mins_60_before["timestamp"] = data["timestamp"] + pd.Timedelta(minutes=60)
@@ -193,12 +199,12 @@ def main():
 
         test_1h.drop(columns=["timestamp"], inplace=True)
         test_2h.drop(columns=["timestamp"], inplace=True)
-
+        print(station_data1.keys())
         # model
         # model_1h = LinearRegression()
         # model_2h = LinearRegression()
-        model_1h = GradientBoostingRegressor()
-        model_2h = GradientBoostingRegressor()
+        model_1h = GradientBoostingRegressor(loss="absolute_error")
+        model_2h = GradientBoostingRegressor(loss="absolute_error")
         # model_1h = RandomForestRegressor()
         # model_2h = RandomForestRegressor()
         # model_1h = SVR()
@@ -223,7 +229,7 @@ def main():
     
 
     # save endgame into a new csv file
-    endgame.to_csv("gradient_boosting.csv", sep=",", index=False)
+    endgame.to_csv("gradient_boosting_absolute_error.csv", sep=",", index=False)
         
 
 if __name__ == '__main__':
